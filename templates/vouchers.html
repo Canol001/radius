@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+{% block title %}Vouchers - WiFi Billing{% endblock %}
+{% block page_title %}Voucher Management{% endblock %}
+
+{% block content %}
+<!-- Generate Vouchers Form -->
+<div class="card mb-4">
+    <div class="card-header" data-bs-toggle="collapse" data-bs-target="#generateForm" style="cursor: pointer;">
+        <i class="bi bi-plus-circle"></i> Generate New Vouchers
+        <i class="bi bi-chevron-down float-end"></i>
+    </div>
+    <div class="collapse {% if request.args.get('action') == 'generate' %}show{% endif %}" id="generateForm">
+        <div class="card-body">
+            <form method="POST" action="{{ url_for('generate_vouchers') }}">
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <label class="form-label">Batch Name</label>
+                        <input type="text" name="batch_name" class="form-control" placeholder="e.g., December Batch">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Quantity</label>
+                        <input type="number" name="quantity" class="form-control" value="10" min="1" max="1000" required>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Prefix</label>
+                        <input type="text" name="prefix" class="form-control" placeholder="e.g., WIFI" maxlength="4">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Bandwidth Plan</label>
+                        <select name="plan_id" class="form-select" required>
+                            {% for plan in plans %}
+                            <option value="{{ plan.id }}">{{ plan.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Duration</label>
+                        <select name="duration" class="form-select" required>
+                            <option value="30">30 Minutes</option>
+                            <option value="60">1 Hour</option>
+                            <option value="180">3 Hours</option>
+                            <option value="360">6 Hours</option>
+                            <option value="720">12 Hours</option>
+                            <option value="1440" selected>1 Day</option>
+                            <option value="4320">3 Days</option>
+                            <option value="10080">7 Days</option>
+                            <option value="43200">30 Days</option>
+                        </select>
+                    </div>
+                    <div class="col-md-1 d-flex align-items-end">
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="bi bi-plus"></i> Generate
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Filter Tabs -->
+<ul class="nav nav-tabs mb-3">
+    <li class="nav-item">
+        <a class="nav-link {% if status_filter == 'all' %}active{% endif %}" href="{{ url_for('vouchers', status='all') }}">
+            All <span class="badge bg-secondary">{{ vouchers|length }}</span>
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link {% if status_filter == 'unused' %}active{% endif %}" href="{{ url_for('vouchers', status='unused') }}">
+            <i class="bi bi-circle text-info"></i> Unused
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link {% if status_filter == 'active' %}active{% endif %}" href="{{ url_for('vouchers', status='active') }}">
+            <i class="bi bi-circle-fill text-success"></i> Active
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link {% if status_filter == 'expired' %}active{% endif %}" href="{{ url_for('vouchers', status='expired') }}">
+            <i class="bi bi-circle-fill text-danger"></i> Expired
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link {% if status_filter == 'disabled' %}active{% endif %}" href="{{ url_for('vouchers', status='disabled') }}">
+            <i class="bi bi-x-circle text-secondary"></i> Disabled
+        </a>
+    </li>
+</ul>
+
+<!-- Vouchers Table -->
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0" id="vouchersTable">
+                <thead>
+                    <tr>
+                        <th><input type="checkbox" id="selectAll"></th>
+                        <th>Voucher Code</th>
+                        <th>Plan</th>
+                        <th>Duration</th>
+                        <th>Status</th>
+                        <th>Created</th>
+                        <th>Expires</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for v in vouchers %}
+                    <tr>
+                        <td><input type="checkbox" class="voucher-check" value="{{ v.id }}"></td>
+                        <td>
+                            <code class="fs-6">{{ v.voucher_code }}</code>
+                            <button class="btn btn-sm btn-link p-0 ms-1" onclick="copyCode('{{ v.voucher_code }}')" title="Copy">
+                                <i class="bi bi-clipboard"></i>
+                            </button>
+                        </td>
+                        <td>{{ v.plan.name if v.plan else '-' }}</td>
+                        <td>{{ format_duration(v.duration_minutes) }}</td>
+                        <td>
+                            {% if v.status == 'unused' %}
+                                <span class="badge bg-info">Unused</span>
+                            {% elif v.status == 'active' %}
+                                <span class="badge bg-success">Active</span>
+                            {% elif v.status == 'expired' %}
+                                <span class="badge bg-danger">Expired</span>
+                            {% else %}
+                                <span class="badge bg-secondary">Disabled</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ v.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                        <td>{{ v.expiry_at.strftime('%Y-%m-%d %H:%M') if v.expiry_at else '-' }}</td>
+                        <td>
+                            {% if v.status in ['unused', 'active'] %}
+                            <form method="POST" action="{{ url_for('disable_voucher', id=v.id) }}" class="d-inline">
+                                <button type="submit" class="btn btn-sm btn-outline-warning" title="Disable" onclick="return confirm('Disable this voucher?')">
+                                    <i class="bi bi-slash-circle"></i>
+                                </button>
+                            </form>
+                            {% endif %}
+                            <form method="POST" action="{{ url_for('delete_voucher', id=v.id) }}" class="d-inline">
+                                <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete" onclick="return confirm('Delete this voucher?')">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="8" class="text-center text-muted py-4">No vouchers found</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function copyCode(code) {
+    navigator.clipboard.writeText(code);
+    // Show toast or feedback
+}
+
+document.getElementById('selectAll').addEventListener('change', function() {
+    document.querySelectorAll('.voucher-check').forEach(cb => cb.checked = this.checked);
+});
+</script>
+{% endblock %}

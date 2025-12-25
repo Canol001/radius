@@ -1,0 +1,259 @@
+{% extends "base.html" %}
+{% block title %}System Status - RADIUS Server{% endblock %}
+{% block page_title %}System Status{% endblock %}
+
+{% block extra_css %}
+<style>
+    .status-card {
+        border-radius: 12px;
+        transition: all 0.3s;
+    }
+    .status-indicator {
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        display: inline-block;
+        margin-right: 8px;
+    }
+    .status-running { background: #28a745; box-shadow: 0 0 10px rgba(40, 167, 69, 0.5); }
+    .status-stopped { background: #dc3545; box-shadow: 0 0 10px rgba(220, 53, 69, 0.5); }
+    .status-warning { background: #ffc107; box-shadow: 0 0 10px rgba(255, 193, 7, 0.5); }
+    .service-icon {
+        font-size: 2.5rem;
+        opacity: 0.8;
+    }
+    .peer-card {
+        background: #f8f9fa;
+        border-radius: 8px;
+        padding: 12px;
+        margin-bottom: 10px;
+    }
+    .peer-connected { border-left: 4px solid #28a745; }
+    .peer-disconnected { border-left: 4px solid #dc3545; }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Server Info Banner -->
+<div class="alert alert-primary d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <i class="bi bi-server"></i> <strong>Server:</strong> {{ server_ip or '216.219.95.151' }}
+        <span class="mx-3">|</span>
+        <i class="bi bi-shield-lock"></i> <strong>WireGuard:</strong> 10.10.0.1
+        <span class="mx-3">|</span>
+        <i class="bi bi-broadcast"></i> <strong>RADIUS:</strong> {{ server_ip or '216.219.95.151' }}:1812
+    </div>
+    <span class="badge bg-{{ 'success' if status.radius.running and status.database.connected and status.wireguard.running else 'warning' }}">
+        {{ 'All Systems Operational' if status.radius.running and status.database.connected and status.wireguard.running else 'Some Services Down' }}
+    </span>
+</div>
+
+<!-- Service Status Cards -->
+<div class="row g-4 mb-4">
+    <div class="col-md-3">
+        <div class="card status-card h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <h6 class="text-muted mb-2">FreeRADIUS</h6>
+                        <div class="d-flex align-items-center">
+                            <span class="status-indicator {{ 'status-running' if status.radius.running else 'status-stopped' }}"></span>
+                            <span class="fs-5 fw-bold">{{ 'Running' if status.radius.running else 'Stopped' }}</span>
+                        </div>
+                    </div>
+                    <i class="bi bi-broadcast service-icon text-primary"></i>
+                </div>
+                <div class="mt-3">
+                    <small class="text-muted">Authentication & Accounting</small>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card status-card h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <h6 class="text-muted mb-2">WireGuard VPN</h6>
+                        <div class="d-flex align-items-center">
+                            <span class="status-indicator {{ 'status-running' if status.wireguard.running else 'status-stopped' }}"></span>
+                            <span class="fs-5 fw-bold">{{ 'Running' if status.wireguard.running else 'Stopped' }}</span>
+                        </div>
+                    </div>
+                    <i class="bi bi-shield-lock service-icon text-success"></i>
+                </div>
+                <div class="mt-3">
+                    <small class="text-muted">
+                        {{ status.wireguard.connected_peers }}/{{ status.wireguard.peers }} peers connected
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card status-card h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <h6 class="text-muted mb-2">Database</h6>
+                        <div class="d-flex align-items-center">
+                            <span class="status-indicator {{ 'status-running' if status.database.connected else 'status-stopped' }}"></span>
+                            <span class="fs-5 fw-bold">{{ 'Connected' if status.database.connected else 'Disconnected' }}</span>
+                        </div>
+                    </div>
+                    <i class="bi bi-database service-icon text-info"></i>
+                </div>
+                <div class="mt-3">
+                    {% if status.database.connected %}
+                    <small class="text-muted">
+                        {{ status.database.vouchers }} vouchers, {{ status.database.routers }} routers
+                    </small>
+                    {% else %}
+                    <small class="text-danger">{{ status.database.error or 'Connection failed' }}</small>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card status-card h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <h6 class="text-muted mb-2">Web Server</h6>
+                        <div class="d-flex align-items-center">
+                            <span class="status-indicator {{ 'status-running' if status.nginx.running else 'status-stopped' }}"></span>
+                            <span class="fs-5 fw-bold">{{ 'Running' if status.nginx.running else 'Stopped' }}</span>
+                        </div>
+                    </div>
+                    <i class="bi bi-globe service-icon text-warning"></i>
+                </div>
+                <div class="mt-3">
+                    <small class="text-muted">Nginx</small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- WireGuard Peers -->
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-shield-lock"></i> WireGuard Peers (Routers)</span>
+                <button class="btn btn-sm btn-outline-primary" onclick="refreshStatus()">
+                    <i class="bi bi-arrow-clockwise"></i> Refresh
+                </button>
+            </div>
+            <div class="card-body">
+                {% if not status.wireguard.running %}
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle"></i> WireGuard is not running.
+                    <br><small>Run: <code>systemctl start wg-quick@wg0</code></small>
+                </div>
+                {% else %}
+                    {% for router in routers %}
+                        {% if router.wg_enabled %}
+                        {% set wg = router_wg_status.get(router.id, {}) %}
+                        <div class="peer-card {{ 'peer-connected' if wg.get('connected') else 'peer-disconnected' }}">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <strong>{{ router.shortname }}</strong>
+                                    <br><small class="text-muted">{{ router.wg_allowed_ip }}</small>
+                                </div>
+                                <div class="text-end">
+                                    {% if wg.get('connected') %}
+                                        <span class="badge bg-success"><i class="bi bi-check-circle"></i> Connected</span>
+                                    {% else %}
+                                        <span class="badge bg-danger"><i class="bi bi-x-circle"></i> Disconnected</span>
+                                    {% endif %}
+                                    <br><small class="text-muted">{{ wg.get('last_handshake', 'Never') }}</small>
+                                </div>
+                            </div>
+                            {% if wg.get('transfer') %}
+                            <small class="text-muted">Transfer: {{ wg.get('transfer') }}</small>
+                            {% endif %}
+                        </div>
+                        {% endif %}
+                    {% else %}
+                    <p class="text-muted text-center py-3">No routers with WireGuard enabled</p>
+                    {% endfor %}
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Router RADIUS Status -->
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <i class="bi bi-router"></i> Router RADIUS Status
+            </div>
+            <div class="card-body">
+                {% for router in routers %}
+                <div class="peer-card">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>{{ router.shortname }}</strong>
+                            <br><small class="text-muted">{{ router.nasname }}</small>
+                        </div>
+                        <div class="text-end">
+                            <span class="badge bg-{{ 'success' if router.status == 'active' else 'secondary' }}">
+                                {{ router.status }}
+                            </span>
+                            <br>
+                            {% if router.wg_enabled %}
+                                <span class="badge bg-info"><i class="bi bi-shield-lock"></i> WireGuard</span>
+                            {% endif %}
+                            {% if router.api_enabled %}
+                                <span class="badge bg-warning"><i class="bi bi-hdd-network"></i> API</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% else %}
+                <p class="text-muted text-center py-3">No routers configured</p>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Service Commands -->
+<div class="card mt-4">
+    <div class="card-header">
+        <i class="bi bi-terminal"></i> Service Commands
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6">
+                <h6>FreeRADIUS</h6>
+                <pre class="bg-dark text-light p-2 rounded"><code>systemctl status freeradius
+systemctl restart freeradius
+freeradius -X  # Debug mode</code></pre>
+            </div>
+            <div class="col-md-6">
+                <h6>WireGuard</h6>
+                <pre class="bg-dark text-light p-2 rounded"><code>wg show
+systemctl status wg-quick@wg0
+systemctl restart wg-quick@wg0</code></pre>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function refreshStatus() {
+    location.reload();
+}
+
+// Auto-refresh every 30 seconds
+setInterval(refreshStatus, 30000);
+</script>
+{% endblock %}

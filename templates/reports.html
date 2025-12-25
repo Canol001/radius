@@ -1,0 +1,190 @@
+{% extends "base.html" %}
+{% block title %}Reports - WiFi Billing{% endblock %}
+{% block page_title %}Reports & Statistics{% endblock %}
+
+{% block content %}
+<!-- Voucher Stats -->
+<div class="row g-4 mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-ticket-perforated"></i> Voucher Statistics
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col">
+                        <div class="fs-3 fw-bold">{{ voucher_stats.total }}</div>
+                        <div class="text-muted">Total</div>
+                    </div>
+                    <div class="col">
+                        <div class="fs-3 fw-bold text-info">{{ voucher_stats.unused }}</div>
+                        <div class="text-muted">Unused</div>
+                    </div>
+                    <div class="col">
+                        <div class="fs-3 fw-bold text-success">{{ voucher_stats.active }}</div>
+                        <div class="text-muted">Active</div>
+                    </div>
+                    <div class="col">
+                        <div class="fs-3 fw-bold text-danger">{{ voucher_stats.expired }}</div>
+                        <div class="text-muted">Expired</div>
+                    </div>
+                    <div class="col">
+                        <div class="fs-3 fw-bold text-secondary">{{ voucher_stats.disabled }}</div>
+                        <div class="text-muted">Disabled</div>
+                    </div>
+                </div>
+                <!-- Progress bar -->
+                <div class="progress mt-3" style="height: 25px;">
+                    {% if voucher_stats.total > 0 %}
+                    <div class="progress-bar bg-info" style="width: {{ (voucher_stats.unused / voucher_stats.total * 100)|round(1) }}%">
+                        Unused
+                    </div>
+                    <div class="progress-bar bg-success" style="width: {{ (voucher_stats.active / voucher_stats.total * 100)|round(1) }}%">
+                        Active
+                    </div>
+                    <div class="progress-bar bg-danger" style="width: {{ (voucher_stats.expired / voucher_stats.total * 100)|round(1) }}%">
+                        Expired
+                    </div>
+                    <div class="progress-bar bg-secondary" style="width: {{ (voucher_stats.disabled / voucher_stats.total * 100)|round(1) }}%">
+                        Disabled
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Top Users -->
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <i class="bi bi-trophy"></i> Top Users by Data Usage
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Username</th>
+                                <th>Total Data</th>
+                                <th>Sessions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for user in top_users[:10] %}
+                            <tr>
+                                <td>{{ loop.index }}</td>
+                                <td><code>{{ user.username }}</code></td>
+                                <td>{{ format_bytes(user.total_bytes or 0) }}</td>
+                                <td>{{ user.sessions }}</td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="4" class="text-center text-muted py-3">No data yet</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Router Stats -->
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <i class="bi bi-router"></i> Usage by Router
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Router IP</th>
+                                <th>Sessions</th>
+                                <th>Total Data</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for stat in router_stats %}
+                            <tr>
+                                <td><code>{{ stat.nasipaddress }}</code></td>
+                                <td>{{ stat.sessions }}</td>
+                                <td>{{ format_bytes(stat.total_bytes or 0) }}</td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="3" class="text-center text-muted py-3">No data yet</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Daily Stats Chart -->
+<div class="card mt-4">
+    <div class="card-header">
+        <i class="bi bi-graph-up"></i> Daily Usage (Last 30 Days)
+    </div>
+    <div class="card-body">
+        <canvas id="dailyChart" height="100"></canvas>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+const dailyData = {{ daily_stats|tojson if daily_stats else '[]' }};
+const labels = dailyData.map(d => d.date);
+const sessions = dailyData.map(d => d.sessions);
+const bytes = dailyData.map(d => (d.total_bytes || 0) / 1024 / 1024); // Convert to MB
+
+new Chart(document.getElementById('dailyChart'), {
+    type: 'bar',
+    data: {
+        labels: labels,
+        datasets: [{
+            label: 'Sessions',
+            data: sessions,
+            backgroundColor: 'rgba(54, 162, 235, 0.5)',
+            borderColor: 'rgba(54, 162, 235, 1)',
+            borderWidth: 1,
+            yAxisID: 'y'
+        }, {
+            label: 'Data (MB)',
+            data: bytes,
+            type: 'line',
+            borderColor: 'rgba(255, 99, 132, 1)',
+            backgroundColor: 'rgba(255, 99, 132, 0.1)',
+            fill: true,
+            yAxisID: 'y1'
+        }]
+    },
+    options: {
+        responsive: true,
+        scales: {
+            y: {
+                type: 'linear',
+                position: 'left',
+                title: { display: true, text: 'Sessions' }
+            },
+            y1: {
+                type: 'linear',
+                position: 'right',
+                title: { display: true, text: 'Data (MB)' },
+                grid: { drawOnChartArea: false }
+            }
+        }
+    }
+});
+</script>
+{% endblock %}

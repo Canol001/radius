@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit' if plan else 'Add' }} Plan - WiFi Billing{% endblock %}
+{% block page_title %}{{ 'Edit' if plan else 'Add New' }} Bandwidth Plan{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-body">
+                <form method="POST">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Plan Name <span class="text-danger">*</span></label>
+                            <input type="text" name="name" class="form-control" 
+                                   value="{{ plan.name if plan else '' }}" 
+                                   placeholder="e.g., Premium 10Mbps" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Price</label>
+                            <div class="input-group">
+                                <span class="input-group-text">$</span>
+                                <input type="number" name="price" class="form-control" step="0.01"
+                                       value="{{ plan.price if plan else '0' }}" placeholder="0.00">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Download Speed (Kbps) <span class="text-danger">*</span></label>
+                            <input type="number" name="download_speed" class="form-control" 
+                                   value="{{ plan.download_speed if plan else '' }}" 
+                                   placeholder="e.g., 5120 for 5 Mbps" required>
+                            <small class="text-muted">Enter 0 for unlimited. 1024 Kbps = 1 Mbps</small>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Upload Speed (Kbps) <span class="text-danger">*</span></label>
+                            <input type="number" name="upload_speed" class="form-control" 
+                                   value="{{ plan.upload_speed if plan else '' }}" 
+                                   placeholder="e.g., 2048 for 2 Mbps" required>
+                            <small class="text-muted">Enter 0 for unlimited</small>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Data Limit (MB)</label>
+                            <input type="number" name="data_limit" class="form-control" 
+                                   value="{{ (plan.data_limit / 1024 / 1024)|int if plan and plan.data_limit else '0' }}" 
+                                   placeholder="0 for unlimited">
+                            <small class="text-muted">Enter 0 for unlimited data</small>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Description</label>
+                            <textarea name="description" class="form-control" rows="2" 
+                                      placeholder="Optional description...">{{ plan.description if plan else '' }}</textarea>
+                        </div>
+                    </div>
+                    
+                    <hr class="my-4">
+                    
+                    <div class="d-flex justify-content-between">
+                        <a href="{{ url_for('plans') }}" class="btn btn-outline-secondary">
+                            <i class="bi bi-arrow-left"></i> Cancel
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-lg"></i> {{ 'Update' if plan else 'Create' }} Plan
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <!-- Speed Reference -->
+        <div class="card mt-4">
+            <div class="card-header">
+                <i class="bi bi-info-circle"></i> Speed Reference
+            </div>
+            <div class="card-body">
+                <table class="table table-sm mb-0">
+                    <thead>
+                        <tr><th>Speed</th><th>Kbps Value</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>1 Mbps</td><td>1024</td></tr>
+                        <tr><td>2 Mbps</td><td>2048</td></tr>
+                        <tr><td>5 Mbps</td><td>5120</td></tr>
+                        <tr><td>10 Mbps</td><td>10240</td></tr>
+                        <tr><td>20 Mbps</td><td>20480</td></tr>
+                        <tr><td>50 Mbps</td><td>51200</td></tr>
+                        <tr><td>100 Mbps</td><td>102400</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

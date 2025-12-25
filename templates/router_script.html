@@ -1,0 +1,491 @@
+{% extends "base.html" %}
+{% block title %}MikroTik Setup - {{ router.shortname }}{% endblock %}
+{% block page_title %}MikroTik Setup Script: {{ router.shortname }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .script-block {
+        background: #1a1a2e;
+        color: #eee;
+        border-radius: 8px;
+        padding: 1rem;
+        font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+        font-size: 0.85rem;
+        overflow-x: auto;
+        position: relative;
+        white-space: pre-wrap;
+        word-wrap: break-word;
+    }
+    .script-block .comment { color: #6a9955; }
+    .script-block .command { color: #569cd6; }
+    .script-block .param { color: #9cdcfe; }
+    .script-block .value { color: #ce9178; }
+    .copy-btn {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        z-index: 10;
+    }
+    .step-badge {
+        background: #1e3a5f;
+        color: #fff;
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 600;
+        font-size: 0.9rem;
+    }
+    .nav-pills .nav-link.active {
+        background: #1e3a5f;
+    }
+    .config-value {
+        background: #e9ecef;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-family: monospace;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-9">
+        <!-- Config Summary -->
+        <div class="alert alert-info mb-4">
+            <div class="row">
+                <div class="col-md-4">
+                    <strong>Router:</strong> {{ router.shortname }}<br>
+                    <strong>RADIUS IP:</strong> <span class="config-value">{{ server_ip }}</span>
+                </div>
+                <div class="col-md-4">
+                    <strong>Secret:</strong> <span class="config-value">{{ router.secret }}</span><br>
+                    <strong>CoA Port:</strong> <span class="config-value">{{ router.coa_port }}</span>
+                </div>
+                <div class="col-md-4">
+                    {% if router.wg_enabled %}
+                    <strong>WireGuard IP:</strong> <span class="config-value">{{ router.wg_allowed_ip }}</span><br>
+                    <strong>Tunnel:</strong> <span class="badge bg-success">Enabled</span>
+                    {% else %}
+                    <strong>WireGuard:</strong> <span class="badge bg-secondary">Disabled</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Script Tabs -->
+        <ul class="nav nav-pills mb-3" id="scriptTabs" role="tablist">
+            <li class="nav-item">
+                <a class="nav-link active" data-bs-toggle="pill" href="#fullScript">
+                    <i class="bi bi-file-code"></i> Complete Script
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" data-bs-toggle="pill" href="#radiusOnly">
+                    <i class="bi bi-broadcast"></i> RADIUS Only
+                </a>
+            </li>
+            {% if router.wg_enabled %}
+            <li class="nav-item">
+                <a class="nav-link" data-bs-toggle="pill" href="#wireguardOnly">
+                    <i class="bi bi-shield-lock"></i> WireGuard Only
+                </a>
+            </li>
+            {% endif %}
+            {% if router.api_enabled %}
+            <li class="nav-item">
+                <a class="nav-link" data-bs-toggle="pill" href="#apiOnly">
+                    <i class="bi bi-hdd-network"></i> API Setup
+                </a>
+            </li>
+            {% endif %}
+        </ul>
+
+        <div class="tab-content">
+            <!-- COMPLETE SCRIPT -->
+            <div class="tab-pane fade show active" id="fullScript">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <i class="bi bi-clipboard-check"></i> Complete Setup Script - Copy & Paste to MikroTik Terminal
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="script-block" id="completeScript">
+                            <button class="btn btn-sm btn-light copy-btn" onclick="copyScript('completeScript')">
+                                <i class="bi bi-clipboard"></i> Copy All
+                            </button>
+# ================================================
+# MikroTik Setup Script - {{ router.shortname }}
+# Generated: {{ now().strftime('%Y-%m-%d %H:%M') }}
+# RADIUS Server: {{ server_ip }}
+# ================================================
+
+{% if router.wg_enabled and router.wg_public_key %}
+# ----------------
+# WIREGUARD SETUP
+# ----------------
+
+# Create WireGuard interface
+/interface wireguard add name=wg-radius listen-port=13231 private-key="PASTE_YOUR_PRIVATE_KEY_HERE"
+
+# Add server peer
+/interface wireguard peers add \
+    interface=wg-radius \
+    public-key="{{ wg_info.public_key }}" \
+    endpoint-address="{{ server_ip }}" \
+    endpoint-port={{ wg_info.listen_port }} \
+    allowed-address={{ wg_info.server_ip }}/32 \
+    persistent-keepalive=25 \
+{% if router.wg_preshared_key %}    preshared-key="{{ router.wg_preshared_key }}" \
+{% endif %}    comment="RADIUS Server VPN"
+
+# Assign IP to WireGuard interface
+/ip address add address={{ router.wg_allowed_ip.replace('/32', '/24') }} interface=wg-radius comment="WireGuard VPN"
+
+# Add route to RADIUS server through tunnel
+/ip route add dst-address={{ wg_info.server_ip }}/32 gateway=wg-radius comment="RADIUS via WireGuard"
+
+{% endif %}
+# ----------------
+# RADIUS SETUP
+# ----------------
+
+# Add RADIUS server
+/radius add \
+    service=hotspot,login \
+{% if router.wg_enabled %}    address={{ wg_info.server_ip }} \
+{% else %}    address={{ server_ip }} \
+{% endif %}    secret="{{ router.secret }}" \
+    authentication-port=1812 \
+    accounting-port=1813 \
+    timeout=3000ms \
+    comment="WiFi Billing RADIUS"
+
+# Enable RADIUS incoming (CoA/Disconnect)
+/radius incoming set accept=yes port={{ router.coa_port }}
+
+# Configure Hotspot to use RADIUS
+/ip hotspot profile set [find] \
+    use-radius=yes \
+    radius-accounting=yes \
+    radius-interim-update=1m \
+    radius-default-domain=""
+
+{% if router.api_enabled %}
+# ----------------
+# API SETUP
+# ----------------
+
+# Enable API service
+/ip service set api disabled=no port={{ router.api_port }}
+
+# Create API user for RADIUS server
+/user add name=radiusapi group=full password="{{ router.api_password or 'CHANGE_THIS_PASSWORD' }}" comment="RADIUS API User"
+
+{% if router.wg_enabled %}
+# Restrict API to WireGuard interface only (secure)
+/ip service set api address={{ wg_info.server_ip }}/32
+{% endif %}
+{% endif %}
+
+# ----------------
+# FIREWALL RULES
+# ----------------
+
+{% if router.wg_enabled %}
+# Allow WireGuard traffic
+/ip firewall filter add chain=input protocol=udp dst-port=13231 action=accept comment="Allow WireGuard"
+{% endif %}
+
+# Allow RADIUS CoA from server
+/ip firewall filter add \
+    chain=input \
+    protocol=udp \
+    dst-port={{ router.coa_port }} \
+{% if router.wg_enabled %}    src-address={{ wg_info.server_ip }} \
+{% else %}    src-address={{ server_ip }} \
+{% endif %}    action=accept \
+    comment="Allow RADIUS CoA"
+
+# ================================================
+# SETUP COMPLETE!
+# Test: Try logging in with a voucher code
+# ================================================
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- RADIUS ONLY -->
+            <div class="tab-pane fade" id="radiusOnly">
+                <div class="card">
+                    <div class="card-header">
+                        <i class="bi bi-broadcast"></i> RADIUS Configuration Only
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="script-block" id="radiusScript">
+                            <button class="btn btn-sm btn-light copy-btn" onclick="copyScript('radiusScript')">
+                                <i class="bi bi-clipboard"></i> Copy
+                            </button>
+# Add RADIUS server
+/radius add \
+    service=hotspot,login \
+{% if router.wg_enabled %}    address={{ wg_info.server_ip }} \
+{% else %}    address={{ server_ip }} \
+{% endif %}    secret="{{ router.secret }}" \
+    authentication-port=1812 \
+    accounting-port=1813 \
+    timeout=3000ms \
+    comment="WiFi Billing RADIUS"
+
+# Enable RADIUS incoming (CoA/Disconnect)
+/radius incoming set accept=yes port={{ router.coa_port }}
+
+# Configure Hotspot to use RADIUS
+/ip hotspot profile set [find] \
+    use-radius=yes \
+    radius-accounting=yes \
+    radius-interim-update=1m
+
+# Firewall rule for CoA
+/ip firewall filter add \
+    chain=input \
+    protocol=udp \
+    dst-port={{ router.coa_port }} \
+{% if router.wg_enabled %}    src-address={{ wg_info.server_ip }} \
+{% else %}    src-address={{ server_ip }} \
+{% endif %}    action=accept \
+    comment="Allow RADIUS CoA"
+
+# Verify
+/radius print
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {% if router.wg_enabled %}
+            <!-- WIREGUARD ONLY -->
+            <div class="tab-pane fade" id="wireguardOnly">
+                <div class="card">
+                    <div class="card-header">
+                        <i class="bi bi-shield-lock"></i> WireGuard VPN Configuration
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="script-block" id="wgScript">
+                            <button class="btn btn-sm btn-light copy-btn" onclick="copyScript('wgScript')">
+                                <i class="bi bi-clipboard"></i> Copy
+                            </button>
+# ================================================
+# WIREGUARD SETUP FOR MIKROTIK
+# ================================================
+
+# Step 1: Generate keys on MikroTik (run this first, save the output!)
+# /interface wireguard add name=wg-radius listen-port=13231
+# /interface wireguard print  (copy the public-key and give it to admin)
+
+# Step 2: After admin adds your public key, run this:
+
+# Create WireGuard interface (if not created)
+/interface wireguard add name=wg-radius listen-port=13231
+
+# Add RADIUS server as peer
+/interface wireguard peers add \
+    interface=wg-radius \
+    public-key="{{ wg_info.public_key }}" \
+    endpoint-address="{{ server_ip }}" \
+    endpoint-port={{ wg_info.listen_port }} \
+    allowed-address={{ wg_info.server_ip }}/32 \
+    persistent-keepalive=25 \
+{% if router.wg_preshared_key %}    preshared-key="{{ router.wg_preshared_key }}" \
+{% endif %}    comment="RADIUS Server"
+
+# Assign IP address
+/ip address add address={{ router.wg_allowed_ip.replace('/32', '/24') }} interface=wg-radius
+
+# Route to RADIUS server
+/ip route add dst-address={{ wg_info.server_ip }}/32 gateway=wg-radius
+
+# Firewall - allow WireGuard
+/ip firewall filter add chain=input protocol=udp dst-port=13231 action=accept comment="WireGuard"
+
+# Verify connection
+/ping {{ wg_info.server_ip }} count=3
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card mt-3">
+                    <div class="card-header bg-warning">
+                        <i class="bi bi-key"></i> Your WireGuard Keys
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted">Run this on MikroTik to generate keys, then paste the public key in the admin panel:</p>
+                        <div class="script-block" id="keyGenScript">
+                            <button class="btn btn-sm btn-light copy-btn" onclick="copyScript('keyGenScript')">
+                                <i class="bi bi-clipboard"></i> Copy
+                            </button>
+# Generate WireGuard interface with keys
+/interface wireguard add name=wg-radius listen-port=13231
+
+# Show your public key (copy this to admin panel)
+:put [/interface wireguard get wg-radius public-key]
+                        </div>
+                        
+                        {% if router.wg_public_key %}
+                        <div class="mt-3">
+                            <strong>Registered Public Key:</strong>
+                            <code class="d-block mt-1 p-2 bg-light">{{ router.wg_public_key }}</code>
+                        </div>
+                        {% else %}
+                        <div class="alert alert-warning mt-3 mb-0">
+                            <i class="bi bi-exclamation-triangle"></i> 
+                            No public key registered. Generate keys on MikroTik and add the public key in router settings.
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            {% if router.api_enabled %}
+            <!-- API ONLY -->
+            <div class="tab-pane fade" id="apiOnly">
+                <div class="card">
+                    <div class="card-header">
+                        <i class="bi bi-hdd-network"></i> MikroTik API Configuration
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="script-block" id="apiScript">
+                            <button class="btn btn-sm btn-light copy-btn" onclick="copyScript('apiScript')">
+                                <i class="bi bi-clipboard"></i> Copy
+                            </button>
+# Enable API service
+/ip service set api disabled=no port={{ router.api_port }}
+
+# Create dedicated API user
+/user add name=radiusapi group=full password="{{ router.api_password or 'CHANGE_THIS_PASSWORD' }}" comment="RADIUS API"
+
+{% if router.wg_enabled %}
+# Restrict API access to RADIUS server only (via WireGuard)
+/ip service set api address={{ wg_info.server_ip }}/32
+{% else %}
+# Restrict API access to RADIUS server only
+/ip service set api address={{ server_ip }}/32
+{% endif %}
+
+# Verify
+/ip service print where name=api
+/user print where name=radiusapi
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div class="col-lg-3">
+        <div class="card mb-3">
+            <div class="card-header">
+                <i class="bi bi-info-circle"></i> Connection Info
+            </div>
+            <div class="card-body">
+                <table class="table table-sm table-borderless mb-0">
+                    <tr>
+                        <td class="text-muted">Router</td>
+                        <td>{{ router.shortname }}</td>
+                    </tr>
+                    <tr>
+                        <td class="text-muted">RADIUS Server</td>
+                        <td><code>{% if router.wg_enabled %}{{ wg_info.server_ip }}{% else %}{{ server_ip }}{% endif %}</code></td>
+                    </tr>
+                    <tr>
+                        <td class="text-muted">Secret</td>
+                        <td><code>{{ router.secret }}</code></td>
+                    </tr>
+                    {% if router.wg_enabled %}
+                    <tr>
+                        <td class="text-muted">WG Tunnel IP</td>
+                        <td><code>{{ router.wg_allowed_ip }}</code></td>
+                    </tr>
+                    {% endif %}
+                </table>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-header">
+                <i class="bi bi-check-circle"></i> Verify Setup
+            </div>
+            <div class="card-body">
+                <p class="small text-muted">Run these commands to verify:</p>
+                <div class="script-block" style="font-size: 0.75rem;" id="verifyScript">
+                    <button class="btn btn-sm btn-light copy-btn" onclick="copyScript('verifyScript')" style="padding: 2px 6px; font-size: 0.7rem;">
+                        <i class="bi bi-clipboard"></i>
+                    </button>
+# Check RADIUS
+/radius print
+
+# Check hotspot profile
+/ip hotspot profile print
+
+{% if router.wg_enabled %}
+# Check WireGuard
+/interface wireguard peers print
+/ping {{ wg_info.server_ip }}
+{% endif %}
+
+# Test auth (from VPS)
+# radtest VOUCHER VOUCHER {{ router.nasname }} 0 {{ router.secret }}
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-lightbulb"></i> Tips
+            </div>
+            <div class="card-body">
+                <ul class="small mb-0 ps-3">
+                    <li class="mb-2">Copy the complete script and paste into MikroTik terminal</li>
+                    <li class="mb-2">For WireGuard, generate keys on MikroTik first</li>
+                    <li class="mb-2">Test with a voucher code after setup</li>
+                    <li class="mb-2">Check <code>/log print</code> for errors</li>
+                </ul>
+            </div>
+        </div>
+
+        <a href="{{ url_for('routers') }}" class="btn btn-outline-secondary w-100 mt-3">
+            <i class="bi bi-arrow-left"></i> Back to Routers
+        </a>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function copyScript(elementId) {
+    const el = document.getElementById(elementId);
+    // Get text content, excluding the copy button
+    let text = el.innerText;
+    // Remove "Copy" or "Copy All" from the beginning
+    text = text.replace(/^Copy( All)?\s*/, '').trim();
+    
+    navigator.clipboard.writeText(text).then(() => {
+        const btn = el.querySelector('.copy-btn');
+        const originalHtml = btn.innerHTML;
+        btn.innerHTML = '<i class="bi bi-check"></i> Copied!';
+        btn.classList.remove('btn-light');
+        btn.classList.add('btn-success');
+        setTimeout(() => {
+            btn.innerHTML = originalHtml;
+            btn.classList.remove('btn-success');
+            btn.classList.add('btn-light');
+        }, 2000);
+    });
+}
+</script>
+{% endblock %}

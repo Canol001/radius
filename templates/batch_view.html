@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% block title %}Batch: {{ batch.batch_name }} - WiFi Billing{% endblock %}
+{% block page_title %}Voucher Batch: {{ batch.batch_name }}{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-info-circle"></i> Batch Information
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <table class="table table-sm table-borderless">
+                            <tr>
+                                <td class="text-muted">Batch Name</td>
+                                <td>{{ batch.batch_name }}</td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">Created</td>
+                                <td>{{ batch.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">Created By</td>
+                                <td>{{ batch.creator.username if batch.creator else 'System' }}</td>
+                            </tr>
+                        </table>
+                    </div>
+                    <div class="col-md-6">
+                        <table class="table table-sm table-borderless">
+                            <tr>
+                                <td class="text-muted">Quantity</td>
+                                <td>{{ batch.quantity }}</td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">Duration</td>
+                                <td>{{ format_duration(batch.duration_minutes) }}</td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">Plan</td>
+                                <td>{{ batch.plan.name if batch.plan else 'N/A' }}</td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-pie-chart"></i> Status
+            </div>
+            <div class="card-body text-center">
+                {% set unused = vouchers|selectattr('status', 'equalto', 'unused')|list|length %}
+                {% set active = vouchers|selectattr('status', 'equalto', 'active')|list|length %}
+                {% set expired = vouchers|selectattr('status', 'equalto', 'expired')|list|length %}
+                <div class="row">
+                    <div class="col-4">
+                        <div class="fs-4 text-info">{{ unused }}</div>
+                        <small class="text-muted">Unused</small>
+                    </div>
+                    <div class="col-4">
+                        <div class="fs-4 text-success">{{ active }}</div>
+                        <small class="text-muted">Active</small>
+                    </div>
+                    <div class="col-4">
+                        <div class="fs-4 text-danger">{{ expired }}</div>
+                        <small class="text-muted">Expired</small>
+                    </div>
+                </div>
+                <hr>
+                <a href="{{ url_for('print_vouchers', batch_id=batch.id) }}" class="btn btn-primary" target="_blank">
+                    <i class="bi bi-printer"></i> Print Unused Vouchers
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <i class="bi bi-list"></i> Vouchers in this Batch
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>Code</th>
+                        <th>Status</th>
+                        <th>Created</th>
+                        <th>Activated</th>
+                        <th>Expires</th>
+                        <th>MAC Address</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for v in vouchers %}
+                    <tr>
+                        <td><code>{{ v.voucher_code }}</code></td>
+                        <td>
+                            {% if v.status == 'unused' %}
+                                <span class="badge bg-info">Unused</span>
+                            {% elif v.status == 'active' %}
+                                <span class="badge bg-success">Active</span>
+                            {% elif v.status == 'expired' %}
+                                <span class="badge bg-danger">Expired</span>
+                            {% else %}
+                                <span class="badge bg-secondary">{{ v.status }}</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ v.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                        <td>{{ v.activated_at.strftime('%Y-%m-%d %H:%M') if v.activated_at else '-' }}</td>
+                        <td>{{ v.expiry_at.strftime('%Y-%m-%d %H:%M') if v.expiry_at else '-' }}</td>
+                        <td><small>{{ v.used_by_mac or '-' }}</small></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="mt-3">
+    <a href="{{ url_for('vouchers') }}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left"></i> Back to Vouchers
+    </a>
+</div>
+{% endblock %}

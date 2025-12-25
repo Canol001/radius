@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Activity Log - WiFi Billing{% endblock %}
+{% block page_title %}Activity Log{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <i class="bi bi-journal-text"></i> Recent Activity
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>User</th>
+                        <th>Action</th>
+                        <th>Details</th>
+                        <th>IP Address</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for log in logs %}
+                    <tr>
+                        <td>{{ log.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                        <td>{{ log.user.username if log.user else 'System' }}</td>
+                        <td>
+                            {% if 'login' in log.action %}
+                                <span class="badge bg-success">{{ log.action }}</span>
+                            {% elif 'logout' in log.action %}
+                                <span class="badge bg-secondary">{{ log.action }}</span>
+                            {% elif 'delete' in log.action %}
+                                <span class="badge bg-danger">{{ log.action }}</span>
+                            {% elif 'add' in log.action or 'generate' in log.action %}
+                                <span class="badge bg-primary">{{ log.action }}</span>
+                            {% elif 'edit' in log.action or 'update' in log.action %}
+                                <span class="badge bg-warning">{{ log.action }}</span>
+                            {% else %}
+                                <span class="badge bg-info">{{ log.action }}</span>
+                            {% endif %}
+                        </td>
+                        <td><small>{{ log.details or '-' }}</small></td>
+                        <td><code>{{ log.ip_address or '-' }}</code></td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="5" class="text-center text-muted py-4">No activity recorded</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

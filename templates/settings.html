@@ -1,0 +1,221 @@
+{% extends "base.html" %}
+{% block title %}Settings - RADIUS Server{% endblock %}
+{% block page_title %}System Settings{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8">
+        <!-- Database Configuration -->
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-database"></i> Database Configuration</span>
+                {% if db_connected %}
+                <span class="badge bg-success"><i class="bi bi-check-circle"></i> Connected</span>
+                {% else %}
+                <span class="badge bg-danger"><i class="bi bi-x-circle"></i> Disconnected</span>
+                {% endif %}
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('save_settings') }}">
+                    <input type="hidden" name="section" value="database">
+                    <div class="row g-3">
+                        <div class="col-md-8">
+                            <label class="form-label">Database Host</label>
+                            <input type="text" name="db_host" class="form-control" 
+                                   value="{{ config.database.host if config.database else 'localhost' }}">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Port</label>
+                            <input type="number" name="db_port" class="form-control" 
+                                   value="{{ config.database.port if config.database else 3306 }}">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Database Name</label>
+                            <input type="text" name="db_name" class="form-control" 
+                                   value="{{ config.database.name if config.database else 'radius' }}">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Username</label>
+                            <input type="text" name="db_user" class="form-control" 
+                                   value="{{ config.database.user if config.database else 'radius' }}">
+                        </div>
+                        <div class="col-md-12">
+                            <label class="form-label">Password</label>
+                            <input type="password" name="db_pass" class="form-control" 
+                                   value="{{ config.database.password if config.database else '' }}"
+                                   placeholder="Enter new password to change">
+                        </div>
+                    </div>
+                    <hr>
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-outline-primary" onclick="testDbConnection()">
+                            <i class="bi bi-plug"></i> Test Connection
+                        </button>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-lg"></i> Save Database Settings
+                        </button>
+                    </div>
+                    <div id="dbTestResult" class="mt-2"></div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Server Settings -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <i class="bi bi-server"></i> Server Settings
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('save_settings') }}">
+                    <input type="hidden" name="section" value="server">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Server Public IP</label>
+                            <input type="text" name="server_ip" class="form-control" 
+                                   value="{{ config.server_ip or '216.219.95.151' }}">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">WireGuard Tunnel IP</label>
+                            <input type="text" class="form-control" value="10.10.0.1" disabled>
+                        </div>
+                    </div>
+                    <hr>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-check-lg"></i> Save Server Settings
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- General Settings -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <i class="bi bi-gear"></i> General Settings
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('save_settings') }}">
+                    <input type="hidden" name="section" value="general">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Site Name</label>
+                            <input type="text" name="site_name" class="form-control" 
+                                   value="{{ config.site_name or 'RADIUS Server' }}">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Voucher Prefix</label>
+                            <input type="text" name="voucher_prefix" class="form-control" 
+                                   value="{{ config.voucher_prefix or 'WIFI' }}" maxlength="4">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Voucher Code Length</label>
+                            <input type="number" name="voucher_length" class="form-control" 
+                                   value="{{ config.voucher_length or 8 }}" min="6" max="12">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Cleanup Interval (minutes)</label>
+                            <input type="number" name="cleanup_interval" class="form-control" 
+                                   value="{{ config.cleanup_interval or 5 }}" min="1">
+                        </div>
+                    </div>
+                    <hr>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-check-lg"></i> Save General Settings
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <!-- System Info -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <i class="bi bi-info-circle"></i> System Info
+            </div>
+            <div class="card-body">
+                <table class="table table-sm table-borderless mb-0">
+                    <tr>
+                        <td class="text-muted">Version</td>
+                        <td>1.0.0</td>
+                    </tr>
+                    <tr>
+                        <td class="text-muted">Server IP</td>
+                        <td><code>{{ config.server_ip or '216.219.95.151' }}</code></td>
+                    </tr>
+                    <tr>
+                        <td class="text-muted">Database</td>
+                        <td>{{ config.database.host if config.database else 'localhost' }}:{{ config.database.port if config.database else 3306 }}</td>
+                    </tr>
+                    <tr>
+                        <td class="text-muted">Setup Date</td>
+                        <td>{{ config.setup_date[:10] if config.setup_date else 'N/A' }}</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <i class="bi bi-lightning"></i> Quick Actions
+            </div>
+            <div class="card-body d-grid gap-2">
+                <a href="{{ url_for('setup') }}?force=1" class="btn btn-outline-warning">
+                    <i class="bi bi-arrow-repeat"></i> Re-run Setup Wizard
+                </a>
+                <button class="btn btn-outline-danger" onclick="if(confirm('This will recreate all tables. Continue?')) location.href='/settings/recreate-tables'">
+                    <i class="bi bi-database-gear"></i> Recreate Tables
+                </button>
+            </div>
+        </div>
+
+        <!-- Quick Help -->
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-book"></i> Quick Help
+            </div>
+            <div class="card-body">
+                <ul class="mb-0 ps-3">
+                    <li class="mb-2">Test RADIUS: <code>radtest user pass localhost 0 secret</code></li>
+                    <li class="mb-2">View logs: <code>tail -f /var/log/freeradius/radius.log</code></li>
+                    <li class="mb-2">Restart: <code>systemctl restart freeradius</code></li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function testDbConnection() {
+    const resultDiv = document.getElementById('dbTestResult');
+    resultDiv.innerHTML = '<span class="text-muted"><i class="bi bi-hourglass-split"></i> Testing...</span>';
+    
+    const data = {
+        host: document.querySelector('input[name="db_host"]').value,
+        port: document.querySelector('input[name="db_port"]').value,
+        user: document.querySelector('input[name="db_user"]').value,
+        password: document.querySelector('input[name="db_pass"]').value,
+        database: document.querySelector('input[name="db_name"]').value
+    };
+    
+    fetch('/setup/test-db', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data)
+    })
+    .then(r => r.json())
+    .then(result => {
+        if (result.success) {
+            resultDiv.innerHTML = '<span class="text-success"><i class="bi bi-check-circle"></i> Connection successful!</span>';
+        } else {
+            resultDiv.innerHTML = '<span class="text-danger"><i class="bi bi-x-circle"></i> ' + result.message + '</span>';
+        }
+    })
+    .catch(err => {
+        resultDiv.innerHTML = '<span class="text-danger"><i class="bi bi-x-circle"></i> Error: ' + err + '</span>';
+    });
+}
+</script>
+{% endblock %}

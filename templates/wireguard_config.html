@@ -1,0 +1,282 @@
+{% extends "base.html" %}
+{% block title %}WireGuard Config - {{ router.shortname }}{% endblock %}
+{% block page_title %}WireGuard Configuration: {{ router.shortname }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .config-block {
+        background: #1e1e1e;
+        color: #d4d4d4;
+        border-radius: 8px;
+        padding: 1.5rem;
+        font-family: 'Consolas', 'Monaco', monospace;
+        font-size: 0.9rem;
+        position: relative;
+        overflow-x: auto;
+    }
+    .config-block .comment { color: #6a9955; }
+    .config-block .section { color: #569cd6; }
+    .config-block .key { color: #9cdcfe; }
+    .config-block .value { color: #ce9178; }
+    .copy-btn {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+    }
+    .step-badge {
+        width: 28px;
+        height: 28px;
+        background: #1e3a5f;
+        color: #fff;
+        border-radius: 50%;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 600;
+        margin-right: 8px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8">
+        <div class="alert alert-info">
+            <i class="bi bi-info-circle"></i>
+            Follow these steps to configure WireGuard VPN between your MikroTik router and this RADIUS server.
+        </div>
+
+        <!-- Step 1: Generate Keys on MikroTik -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <span class="step-badge">1</span> Generate WireGuard Keys on MikroTik
+            </div>
+            <div class="card-body">
+                <p class="text-muted">Run these commands on your MikroTik router (RouterOS 7+):</p>
+                <div class="config-block" id="step1">
+                    <button class="btn btn-sm btn-outline-light copy-btn" onclick="copyCode('step1')">
+                        <i class="bi bi-clipboard"></i> Copy
+                    </button>
+<span class="comment"># Create WireGuard interface</span>
+<span class="section">/interface wireguard add</span> <span class="key">name=</span><span class="value">wg-radius</span> <span class="key">listen-port=</span><span class="value">13231</span> <span class="key">private-key=</span><span class="value">auto</span>
+
+<span class="comment"># View the generated public key (copy this!)</span>
+<span class="section">/interface wireguard print</span>
+                </div>
+                <div class="alert alert-warning mt-3 mb-0">
+                    <i class="bi bi-key"></i> Copy the <strong>public-key</strong> from the output and paste it in the router settings in admin panel.
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 2: Add Server as Peer -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <span class="step-badge">2</span> Add RADIUS Server as WireGuard Peer
+            </div>
+            <div class="card-body">
+                <p class="text-muted">Add this server as a peer on your MikroTik:</p>
+                <div class="config-block" id="step2">
+                    <button class="btn btn-sm btn-outline-light copy-btn" onclick="copyCode('step2')">
+                        <i class="bi bi-clipboard"></i> Copy
+                    </button>
+<span class="comment"># Add RADIUS server as peer</span>
+<span class="section">/interface wireguard peers add</span> \
+    <span class="key">interface=</span><span class="value">wg-radius</span> \
+    <span class="key">public-key=</span><span class="value">"{{ server_public_key }}"</span> \
+    <span class="key">endpoint-address=</span><span class="value">{{ server_ip }}</span> \
+    <span class="key">endpoint-port=</span><span class="value">51820</span> \
+    <span class="key">allowed-address=</span><span class="value">10.10.0.0/24</span> \
+    <span class="key">persistent-keepalive=</span><span class="value">25</span>
+{% if router.wg_preshared_key %}    <span class="key">preshared-key=</span><span class="value">"{{ router.wg_preshared_key }}"</span>{% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 3: Configure IP Address -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <span class="step-badge">3</span> Assign IP Address to WireGuard Interface
+            </div>
+            <div class="card-body">
+                <div class="config-block" id="step3">
+                    <button class="btn btn-sm btn-outline-light copy-btn" onclick="copyCode('step3')">
+                        <i class="bi bi-clipboard"></i> Copy
+                    </button>
+<span class="comment"># Assign tunnel IP address</span>
+<span class="section">/ip address add</span> <span class="key">address=</span><span class="value">{{ router.wg_allowed_ip or '10.10.0.X/24' }}</span> <span class="key">interface=</span><span class="value">wg-radius</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 4: Configure RADIUS to use tunnel -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <span class="step-badge">4</span> Configure RADIUS to Use VPN Tunnel
+            </div>
+            <div class="card-body">
+                <p class="text-muted">Update your RADIUS server to use the tunnel IP:</p>
+                <div class="config-block" id="step4">
+                    <button class="btn btn-sm btn-outline-light copy-btn" onclick="copyCode('step4')">
+                        <i class="bi bi-clipboard"></i> Copy
+                    </button>
+<span class="comment"># Remove old RADIUS server (if exists)</span>
+<span class="section">/radius remove</span> <span class="key">[find where address={{ server_ip }}]</span>
+
+<span class="comment"># Add RADIUS server using tunnel IP</span>
+<span class="section">/radius add</span> \
+    <span class="key">service=</span><span class="value">hotspot,login</span> \
+    <span class="key">address=</span><span class="value">10.10.0.1</span> \
+    <span class="key">secret=</span><span class="value">"{{ router.secret }}"</span> \
+    <span class="key">authentication-port=</span><span class="value">1812</span> \
+    <span class="key">accounting-port=</span><span class="value">1813</span> \
+    <span class="key">timeout=</span><span class="value">3000ms</span>
+
+<span class="comment"># Enable incoming (CoA) - now works through tunnel!</span>
+<span class="section">/radius incoming set</span> <span class="key">accept=</span><span class="value">yes</span> <span class="key">port=</span><span class="value">{{ router.coa_port }}</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 5: Enable API (Optional) -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <span class="step-badge">5</span> Enable MikroTik API (For Instant Disconnect)
+            </div>
+            <div class="card-body">
+                <p class="text-muted">Enable API service - it's now secure through the VPN tunnel:</p>
+                <div class="config-block" id="step5">
+                    <button class="btn btn-sm btn-outline-light copy-btn" onclick="copyCode('step5')">
+                        <i class="bi bi-clipboard"></i> Copy
+                    </button>
+<span class="comment"># Enable API (only accessible via VPN tunnel)</span>
+<span class="section">/ip service set</span> <span class="key">api</span> <span class="key">disabled=</span><span class="value">no</span> <span class="key">port=</span><span class="value">8728</span> <span class="key">address=</span><span class="value">10.10.0.0/24</span>
+
+<span class="comment"># Create API user for RADIUS system</span>
+<span class="section">/user add</span> <span class="key">name=</span><span class="value">radius-api</span> <span class="key">group=</span><span class="value">full</span> <span class="key">password=</span><span class="value">YourSecurePassword</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Verify Connection -->
+        <div class="card mb-4">
+            <div class="card-header bg-success text-white">
+                <i class="bi bi-check-circle"></i> Verify Connection
+            </div>
+            <div class="card-body">
+                <div class="config-block" id="verify">
+                    <button class="btn btn-sm btn-outline-light copy-btn" onclick="copyCode('verify')">
+                        <i class="bi bi-clipboard"></i> Copy
+                    </button>
+<span class="comment"># Check WireGuard status</span>
+<span class="section">/interface wireguard peers print</span>
+
+<span class="comment"># Ping RADIUS server through tunnel</span>
+<span class="section">/ping</span> <span class="value">10.10.0.1</span> <span class="key">count=</span><span class="value">3</span>
+
+<span class="comment"># Test RADIUS authentication</span>
+<span class="section">/radius monitor</span> <span class="value">0</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div class="col-lg-4">
+        <div class="card mb-4">
+            <div class="card-header">
+                <i class="bi bi-info-circle"></i> Connection Details
+            </div>
+            <div class="card-body">
+                <table class="table table-sm table-borderless">
+                    <tr>
+                        <td class="text-muted">Router Name</td>
+                        <td>{{ router.shortname }}</td>
+                    </tr>
+                    <tr>
+                        <td class="text-muted">Server IP</td>
+                        <td><code>{{ server_ip }}</code></td>
+                    </tr>
+                    <tr>
+                        <td class="text-muted">Server WG IP</td>
+                        <td><code>10.10.0.1</code></td>
+                    </tr>
+                    <tr>
+                        <td class="text-muted">Router WG IP</td>
+                        <td><code>{{ router.wg_allowed_ip or 'Not assigned' }}</code></td>
+                    </tr>
+                    <tr>
+                        <td class="text-muted">WG Port</td>
+                        <td>51820</td>
+                    </tr>
+                    <tr>
+                        <td class="text-muted">RADIUS Secret</td>
+                        <td><code>{{ router.secret }}</code></td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-header">
+                <i class="bi bi-diagram-3"></i> Network Diagram
+            </div>
+            <div class="card-body text-center">
+                <pre class="text-start bg-light p-3 rounded" style="font-size: 0.75rem;">
+┌─────────────────┐
+│   VPS Server    │
+│   10.10.0.1     │
+│  (RADIUS+WG)    │
+└────────┬────────┘
+         │ WireGuard
+         │ Tunnel
+         │ (Encrypted)
+┌────────┴────────┐
+│  MikroTik       │
+│  {{ (router.wg_allowed_ip or '10.10.0.X/32').split('/')[0] }}      │
+│  (Hotspot)      │
+└─────────────────┘
+                </pre>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-lightbulb"></i> Benefits of VPN
+            </div>
+            <div class="card-body">
+                <ul class="mb-0 ps-3">
+                    <li>Works behind any NAT</li>
+                    <li>Encrypted traffic</li>
+                    <li>No ports exposed</li>
+                    <li>CoA works both ways</li>
+                    <li>API access secured</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="mt-4">
+            <a href="{{ url_for('routers') }}" class="btn btn-outline-secondary w-100">
+                <i class="bi bi-arrow-left"></i> Back to Routers
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function copyCode(elementId) {
+    const el = document.getElementById(elementId);
+    let text = el.innerText;
+    // Remove "Copy" button text
+    text = text.replace(/Copy/g, '').trim();
+    navigator.clipboard.writeText(text).then(() => {
+        const btn = el.querySelector('.copy-btn');
+        const original = btn.innerHTML;
+        btn.innerHTML = '<i class="bi bi-check"></i> Copied!';
+        setTimeout(() => btn.innerHTML = original, 2000);
+    });
+}
+</script>
+{% endblock %}

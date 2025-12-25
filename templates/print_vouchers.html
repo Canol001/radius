@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Print Vouchers - {{ batch.batch_name }}</title>
+    <style>
+        @media print {
+            body { margin: 0; }
+            .no-print { display: none; }
+        }
+        body {
+            font-family: Arial, sans-serif;
+            background: #f5f5f5;
+            padding: 20px;
+        }
+        .voucher-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        .voucher-card {
+            background: white;
+            border: 2px dashed #ccc;
+            border-radius: 10px;
+            padding: 15px;
+            text-align: center;
+        }
+        .voucher-card .logo {
+            font-size: 24px;
+            color: #1e3a5f;
+            margin-bottom: 5px;
+        }
+        .voucher-card .title {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 10px;
+        }
+        .voucher-card .code {
+            font-size: 20px;
+            font-weight: bold;
+            font-family: monospace;
+            background: #f0f0f0;
+            padding: 8px;
+            border-radius: 5px;
+            letter-spacing: 2px;
+        }
+        .voucher-card .details {
+            font-size: 11px;
+            color: #888;
+            margin-top: 10px;
+        }
+        .voucher-card .duration {
+            font-size: 14px;
+            color: #28a745;
+            font-weight: bold;
+            margin-top: 5px;
+        }
+        .print-btn {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 10px 20px;
+            background: #1e3a5f;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .print-btn:hover {
+            background: #2d5a8f;
+        }
+    </style>
+</head>
+<body>
+    <button class="print-btn no-print" onclick="window.print()">🖨️ Print Vouchers</button>
+    
+    <div class="voucher-grid">
+        {% for v in vouchers %}
+        <div class="voucher-card">
+            <div class="logo">📶 WiFi</div>
+            <div class="title">Internet Access Voucher</div>
+            <div class="code">{{ v.voucher_code }}</div>
+            <div class="duration">{{ format_duration(v.duration_minutes) }}</div>
+            <div class="details">
+                {% if v.plan %}{{ v.plan.name }}{% endif %}<br>
+                Valid once • Single device
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</body>
+</html>

@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}Active Sessions - WiFi Billing{% endblock %}
+{% block page_title %}Active Sessions{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-people"></i> Currently Connected Users ({{ sessions|length }})</span>
+        <button class="btn btn-sm btn-outline-secondary" onclick="location.reload()">
+            <i class="bi bi-arrow-clockwise"></i> Refresh
+        </button>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>Username</th>
+                        <th>IP Address</th>
+                        <th>MAC Address</th>
+                        <th>NAS IP</th>
+                        <th>Started</th>
+                        <th>Duration</th>
+                        <th>Download</th>
+                        <th>Upload</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for s in sessions %}
+                    <tr>
+                        <td><code>{{ s.username }}</code></td>
+                        <td>{{ s.framedipaddress or '-' }}</td>
+                        <td><small>{{ s.callingstationid or '-' }}</small></td>
+                        <td>{{ s.nasipaddress }}</td>
+                        <td>{{ s.acctstarttime.strftime('%Y-%m-%d %H:%M') if s.acctstarttime else '-' }}</td>
+                        <td>
+                            {% if s.acctstarttime %}
+                                {% set duration = (now() - s.acctstarttime).total_seconds() // 60 %}
+                                {% if duration < 60 %}
+                                    {{ duration|int }} min
+                                {% else %}
+                                    {{ (duration // 60)|int }}h {{ (duration % 60)|int }}m
+                                {% endif %}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td>{{ format_bytes(s.acctinputoctets or 0) }}</td>
+                        <td>{{ format_bytes(s.acctoutputoctets or 0) }}</td>
+                        <td>
+                            <form method="POST" action="{{ url_for('disconnect_session', id=s.radacctid) }}" class="d-inline">
+                                <button type="submit" class="btn btn-sm btn-outline-danger" 
+                                        onclick="return confirm('Disconnect this user?')" title="Disconnect">
+                                    <i class="bi bi-x-circle"></i> Disconnect
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="9" class="text-center text-muted py-5">
+                            <i class="bi bi-people display-4 d-block mb-3"></i>
+                            No active sessions
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% if sessions %}
+<div class="mt-3">
+    <small class="text-muted">
+        Total Data: Download {{ format_bytes(sessions|sum(attribute='acctinputoctets') or 0) }} / 
+        Upload {{ format_bytes(sessions|sum(attribute='acctoutputoctets') or 0) }}
+    </small>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Auto-refresh every 30 seconds
+setTimeout(() => location.reload(), 30000);
+</script>
+{% endblock %}
