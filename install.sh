@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================
-# RADIUS Server - One-Click Installer (Fixed Version)
+# RADIUS Server - One-Click Installer
 # ============================================
 # Run with: curl -sSL https://raw.githubusercontent.com/Canol001/radius/main/install.sh | sudo bash
 # Or: wget -qO- https://raw.githubusercontent.com/Canol001/radius/main/install.sh | sudo bash
@@ -98,7 +98,7 @@ apt-get install -y \
     python3 python3-pip python3-venv python3-dev \
     nginx certbot python3-certbot-nginx \
     wireguard wireguard-tools \
-    ufw iptables-persistent
+    ufw
 
 echo -e "${BLUE}[3/10] Configuring firewall...${NC}"
 ufw allow 22/tcp
@@ -126,8 +126,8 @@ WGCONF
 
 chmod 600 /etc/wireguard/wg0.conf
 
-# Enable IP forwarding persistently
-echo "net.ipv4.ip_forward=1" | tee -a /etc/sysctl.conf
+# Enable IP forwarding
+echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
 sysctl -p
 
 systemctl enable wg-quick@wg0
@@ -165,6 +165,8 @@ python3 -m venv venv
 source venv/bin/activate
 pip install --upgrade pip
 pip install -r requirements.txt || pip install flask flask-sqlalchemy flask-login flask-wtf pymysql gunicorn werkzeug python-dateutil
+
+
 
 echo -e "${BLUE}[8/10] Configuring FreeRADIUS...${NC}"
 
@@ -231,6 +233,8 @@ if [ -f "$SCHEMA_FILE" ]; then
 else
     echo -e "${RED}Schema file not found! FreeRADIUS SQL tables not created.${NC}"
 fi
+
+
 
 echo -e "${BLUE}[9/10] Creating systemd service...${NC}"
 cat > /etc/systemd/system/radius-server.service <<SERVICE
@@ -304,7 +308,6 @@ chmod 600 $INSTALL_DIR/config.json
 
 # Save WireGuard public key
 echo "$WG_PUBLIC_KEY" > $INSTALL_DIR/wireguard_public_key.txt
-chown www-data:www-data $INSTALL_DIR/wireguard_public_key.txt
 
 # Reload and start services
 systemctl daemon-reload
@@ -315,7 +318,7 @@ systemctl restart freeradius
 systemctl restart radius-server
 
 # Wait for services
-sleep 5
+sleep 3
 
 # Save credentials
 cat > $INSTALL_DIR/INSTALL_INFO.txt <<INFO
@@ -361,7 +364,7 @@ Web App:     $(systemctl is-active radius-server)
 
 USEFUL COMMANDS
 ───────────────
-Restart all:  systemctl restart radius-server freeradius nginx mariadb wg-quick@wg0
+Restart all:  systemctl restart radius-server freeradius nginx
 View logs:    journalctl -u radius-server -f
 Test RADIUS:  radtest testuser testpass localhost 0 testing123
 
@@ -390,7 +393,7 @@ echo ""
 echo -e "${YELLOW}Complete the setup wizard to create your admin account.${NC}"
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo ""
-echo -e "Database credentials and info saved to: ${BLUE}$INSTALL_DIR/INSTALL_INFO.txt${NC}"
+echo -e "Database credentials saved to: ${BLUE}$INSTALL_DIR/INSTALL_INFO.txt${NC}"
 echo ""
 echo -e "${YELLOW}WireGuard Public Key:${NC}"
 echo -e "  $WG_PUBLIC_KEY"
