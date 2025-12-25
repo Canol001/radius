@@ -168,7 +168,15 @@ pip install -r requirements.txt || pip install flask flask-sqlalchemy flask-logi
 
 echo -e "${BLUE}[8/10] Configuring FreeRADIUS...${NC}"
 # Backup and configure SQL module
-cp /etc/freeradius/3.0/mods-available/sql /etc/freeradius/3.0/mods-available/sql.bak
+if [ ! -f /etc/freeradius/3.0/mods-available/sql ]; then
+    echo -e "${YELLOW}SQL module not found, creating new one…${NC}"
+    cat > /etc/freeradius/3.0/mods-available/sql <<SQLCONF
+# your sql module contents here, with $DB_PASS etc.
+SQLCONF
+else
+    cp /etc/freeradius/3.0/mods-available/sql /etc/freeradius/3.0/mods-available/sql.bak
+fi
+
 
 cat > /etc/freeradius/3.0/mods-available/sql <<SQLCONF
 sql {
