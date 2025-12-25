@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================
-# RADIUS Server - One-Click Installer
+# RADIUS Server - One-Click Installer (Fixed Version)
 # ============================================
 # Run with: curl -sSL https://raw.githubusercontent.com/Canol001/radius/main/install.sh | sudo bash
 # Or: wget -qO- https://raw.githubusercontent.com/Canol001/radius/main/install.sh | sudo bash
@@ -98,7 +98,7 @@ apt-get install -y \
     python3 python3-pip python3-venv python3-dev \
     nginx certbot python3-certbot-nginx \
     wireguard wireguard-tools \
-    ufw
+    ufw iptables-persistent
 
 echo -e "${BLUE}[3/10] Configuring firewall...${NC}"
 ufw allow 22/tcp
@@ -126,8 +126,8 @@ WGCONF
 
 chmod 600 /etc/wireguard/wg0.conf
 
-# Enable IP forwarding
-echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
+# Enable IP forwarding persistently
+echo "net.ipv4.ip_forward=1" | tee -a /etc/sysctl.conf
 sysctl -p
 
 systemctl enable wg-quick@wg0
@@ -167,17 +167,16 @@ pip install --upgrade pip
 pip install -r requirements.txt || pip install flask flask-sqlalchemy flask-login flask-wtf pymysql gunicorn werkzeug python-dateutil
 
 echo -e "${BLUE}[8/10] Configuring FreeRADIUS...${NC}"
-# Backup and configure SQL module
-if [ ! -f /etc/freeradius/3.0/mods-available/sql ]; then
-    echo -e "${YELLOW}SQL module not found, creating new one…${NC}"
-    cat > /etc/freeradius/3.0/mods-available/sql <<SQLCONF
-# your sql module contents here, with $DB_PASS etc.
-SQLCONF
-else
-    cp /etc/freeradius/3.0/mods-available/sql /etc/freeradius/3.0/mods-available/sql.bak
+
+# Enable the SQL module if not already enabled
+if [ ! -f /etc/freeradius/3.0/mods-enabled/sql ]; then
+    ln -sf /etc/freeradius/3.0/mods-available/sql /etc/freeradius/3.0/mods-enabled/sql
 fi
 
+# Backup original sql config if not already backed up
+[ -f /etc/freeradius/3.0/mods-available/sql.bak ] || cp /etc/freeradius/3.0/mods-available/sql /etc/freeradius/3.0/mods-available/sql.bak
 
+# Overwrite with our configured version
 cat > /etc/freeradius/3.0/mods-available/sql <<SQLCONF
 sql {
     driver = "rlm_sql_mysql"
@@ -213,13 +212,25 @@ sql {
 }
 SQLCONF
 
-ln -sf /etc/freeradius/3.0/mods-available/sql /etc/freeradius/3.0/mods-enabled/sql
-chgrp -R freerad /etc/freeradius/3.0/mods-available/sql
+# Fix permissions
+chgrp freerad /etc/freeradius/3.0/mods-available/sql
 chmod 640 /etc/freeradius/3.0/mods-available/sql
+chown -h freerad:freerad /etc/freeradius/3.0/mods-enabled/sql
 
-# Enable SQL in default site
-sed -i 's/^#[[:space:]]*sql$/\tsql/' /etc/freeradius/3.0/sites-available/default
-sed -i 's/^#[[:space:]]*-sql$/\t-sql/' /etc/freeradius/3.0/sites-available/default
+# Enable SQL in default and inner-tunnel sites (for accounting and EAP if needed)
+for site in default inner-tunnel; do
+    sed -i 's/^\s*#\s*sql/\tsql/' /etc/freeradius/3.0/sites-available/$site || true
+    sed -i 's/^\s*#\s*-sql/\t-sql/' /etc/freeradius/3.0/sites-available/$site || true
+    sed -i 's/^\s*#\s*sql\s*{\s*$/\tsql/' /etc/freeradius/3.0/sites-available/$site || true
+done
+
+# Import the standard FreeRADIUS MySQL schema (critical - creates all tables)
+SCHEMA_FILE="/etc/freeradius/3.0/mods-config/sql/main/mysql/schema.sql"
+if [ -f "$SCHEMA_FILE" ]; then
+    mysql -u radius -p"$DB_PASS" radius < "$SCHEMA_FILE"
+else
+    echo -e "${RED}Schema file not found! FreeRADIUS SQL tables not created.${NC}"
+fi
 
 echo -e "${BLUE}[9/10] Creating systemd service...${NC}"
 cat > /etc/systemd/system/radius-server.service <<SERVICE
@@ -293,6 +304,7 @@ chmod 600 $INSTALL_DIR/config.json
 
 # Save WireGuard public key
 echo "$WG_PUBLIC_KEY" > $INSTALL_DIR/wireguard_public_key.txt
+chown www-data:www-data $INSTALL_DIR/wireguard_public_key.txt
 
 # Reload and start services
 systemctl daemon-reload
@@ -303,7 +315,7 @@ systemctl restart freeradius
 systemctl restart radius-server
 
 # Wait for services
-sleep 3
+sleep 5
 
 # Save credentials
 cat > $INSTALL_DIR/INSTALL_INFO.txt <<INFO
@@ -349,7 +361,7 @@ Web App:     $(systemctl is-active radius-server)
 
 USEFUL COMMANDS
 ───────────────
-Restart all:  systemctl restart radius-server freeradius nginx
+Restart all:  systemctl restart radius-server freeradius nginx mariadb wg-quick@wg0
 View logs:    journalctl -u radius-server -f
 Test RADIUS:  radtest testuser testpass localhost 0 testing123
 
@@ -378,7 +390,7 @@ echo ""
 echo -e "${YELLOW}Complete the setup wizard to create your admin account.${NC}"
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo ""
-echo -e "Database credentials saved to: ${BLUE}$INSTALL_DIR/INSTALL_INFO.txt${NC}"
+echo -e "Database credentials and info saved to: ${BLUE}$INSTALL_DIR/INSTALL_INFO.txt${NC}"
 echo ""
 echo -e "${YELLOW}WireGuard Public Key:${NC}"
 echo -e "  $WG_PUBLIC_KEY"
