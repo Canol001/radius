@@ -5,12 +5,12 @@ A complete FreeRADIUS-based WiFi billing system with WireGuard VPN support for m
 ## One-Click Installation
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/payfloww909/radius/main/install.sh | sudo bash
+curl -sSL https://raw.githubusercontent.com/Canol001/radius/main/install.sh | sudo bash
 ```
 
 Or with wget:
 ```bash
-wget -qO- https://raw.githubusercontent.com/payfloww909/radius/main/install.sh | sudo bash
+wget -qO- https://raw.githubusercontent.com/Canol001/radius/main/install.sh | sudo bash
 ```
 
 ## Features
@@ -63,7 +63,7 @@ wget -qO- https://raw.githubusercontent.com/payfloww909/radius/main/install.sh |
 If you prefer manual installation:
 
 ```bash
-git clone https://github.com/payfloww909/radius.git
+git clone https://github.com/Canol001/radius.git
 cd radius
 sudo bash install.sh
 ```
