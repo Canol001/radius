@@ -2,8 +2,8 @@
 # ============================================
 # RADIUS Server - One-Click Installer
 # ============================================
-# Run with: curl -sSL https://raw.githubusercontent.com/payfloww909/radius/main/install.sh | sudo bash
-# Or: wget -qO- https://raw.githubusercontent.com/payfloww909/radius/main/install.sh | sudo bash
+# Run with: curl -sSL https://raw.githubusercontent.com/Canol001/radius/main/install.sh | sudo bash
+# Or: wget -qO- https://raw.githubusercontent.com/Canol001/radius/main/install.sh | sudo bash
 # ============================================
 
 set -e
@@ -16,7 +16,7 @@ BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
-REPO_URL="https://github.com/payfloww909/radius.git"
+REPO_URL="https://github.com/Canol001/radius.git"
 INSTALL_DIR="/opt/radius-server"
 WEB_PORT=5000
 
